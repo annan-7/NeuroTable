@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NeuroTable · Brain-based timetable</title>
+<style>
+:root{color-scheme:light;--txt:#1b2142;--mut:#58608f;--glass:rgba(255,255,255,.28);--bd:rgba(255,255,255,.85);--inp:rgba(255,255,255,.45);--acc:#5b6cff;--bg:radial-gradient(circle at 12% 8%,rgba(124,140,255,.5),transparent 42%),radial-gradient(circle at 88% 18%,rgba(255,143,208,.45),transparent 40%),radial-gradient(circle at 75% 92%,rgba(95,217,179,.4),transparent 42%),radial-gradient(circle at 10% 85%,rgba(255,196,107,.35),transparent 38%),#ffffff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg) fixed;color:var(--txt);font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+body::before,body::after{content:"";position:fixed;width:46vmax;height:46vmax;border-radius:50%;filter:blur(70px);opacity:.35;z-index:-1}
+body::before{background:#7c8cff;top:-15vmax;left:-12vmax}
+body::after{background:#ff7ac6;bottom:-18vmax;right:-14vmax}
+#root{max-width:780px;margin:0 auto;padding:18px 14px 60px}
+h1{font-size:1.5rem;margin:0}h2{margin:.2rem 0 .6rem}h3{margin:.4rem 0}
+.muted{color:var(--mut);font-size:.88rem}
+.card{background:var(--glass);border:1px solid var(--bd);border-radius:22px;padding:16px;margin:12px 0;backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);box-shadow:0 8px 32px rgba(60,70,160,.16),inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.35)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.nav{display:flex;gap:6px;margin:12px 0;overflow-x:auto}
+.nav button,.btn,.opt,.chip{font:inherit;color:var(--txt);background:var(--glass);border:1px solid var(--bd);border-radius:14px;padding:8px 14px;cursor:pointer;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.nav button{flex:1;white-space:nowrap}
+.nav button.on,.btn.pri{background:var(--acc);color:#fff;border-color:transparent;font-weight:600}
+.opt{display:block;width:100%;text-align:left;margin:8px 0;padding:12px 14px}
+.opt:hover,.btn:hover{filter:brightness(1.12)}
+.chip{display:inline-block;padding:3px 10px;font-size:.78rem;border-radius:99px;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select{font:inherit;color:var(--txt);background:var(--inp);border:1px solid var(--bd);border-radius:12px;padding:9px 11px;width:100%}
+label{display:block;font-size:.85rem;color:var(--mut);margin:8px 0}
+label.ck{display:flex;gap:8px;align-items:center}label.ck input{width:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{padding:10px;border-radius:16px;background:var(--inp);border:1px solid var(--bd)}.stat b{display:block;font-size:1.25rem}
+.blk{display:flex;gap:12px;background:var(--glass);border:1px solid var(--bd);border-radius:18px;padding:12px;margin:6px 0;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.blk.done{opacity:.55}.blk.now{outline:2px solid var(--acc)}.blk.past{opacity:.7}
+.time{min-width:56px;font-weight:700;font-variant-numeric:tabular-nums}
+.bar{width:5px;border-radius:5px;flex:none}
+.cue{font-size:.82rem;color:var(--mut);margin-top:4px}
+.gap{text-align:center;font-size:.78rem;color:var(--mut);padding:2px}
+.fin{margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd)}
+.en button{flex:1;font-size:.85rem;padding:8px 2px}
+.chart{display:flex;align-items:flex-end;gap:3px;height:120px;margin-top:8px}
+.chart div{flex:1;border-radius:6px 6px 0 0;background:linear-gradient(#8d9bff,#ff9ad5);min-width:6px;position:relative}
+.axis{display:flex;gap:3px;font-size:.62rem;color:var(--mut)}.axis span{flex:1;text-align:center}
+.del{background:none;border:0;color:var(--mut);cursor:pointer;font-size:1rem}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.umd.js"></script>
+<script>
+const {useState,useEffect}=React;
+const html=htm.bind(React.createElement);
+const KEY="neurotable:v1";
+const uid=()=>Math.random().toString(36).slice(2,9);
+const pad=n=>String(n).padStart(2,"0");
+const todayStr=(d=new Date())=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const addDays=(s,n)=>{const [y,m,d]=s.split("-").map(Number);return todayStr(new Date(y,m-1,d+n));};
+const toMin=t=>{const [h,m]=t.split(":").map(Number);return h*60+m;};
+const fmt=m=>pad(Math.floor(m/60)%24)+":"+pad(m%60);
+const TYPES={
+ deep:{n:"Deep focus",c:"#7c8cff",i:"",why:"Hard thinking, placed in a high-energy slot"},
+ creative:{n:"Creative",c:"#ff8fd0",i:"",why:"Looser focus off-peak helps insight"},
+ routine:{n:"Routine",c:"#5fd9b3",i:"",why:"Easy work saved for your energy dip"},
+ social:{n:"Social",c:"#ffc46b",i:"",why:"People time fits a mid-energy slot"},
+ review:{n:"Spaced review",c:"#b69cff",i:"",why:"Retrieval practice, light and before wind-down"}};
+const LV=["Drained","Low","Okay","Good","Peak"];
+const INTERVALS=[1,3,7,14,30];
+const QS=[
+ {q:"If you were free to plan your day, what time would you get up?",o:[["Before 6:30",4],["6:30 – 8:00",3],["8:00 – 9:30",2],["After 9:30",1]]},
+ {q:"How alert do you feel in the first 30 minutes after waking?",o:[["Very alert",4],["Fairly alert",3],["Slightly groggy",2],["Not at all",1]]},
+ {q:"When do you usually feel at your very best?",o:[["Early morning",4],["Late morning",3],["Afternoon",2],["Evening / night",1]]},
+ {q:"In the evening, when do you start feeling tired?",o:[["8:00 – 9:00 pm",4],["9:00 – 10:15 pm",3],["10:15 pm – midnight",2],["After midnight",1]]},
+ {q:"For a hard mental test, which time would you perform best?",o:[["8 – 10 am",4],["11 am – 1 pm",3],["3 – 5 pm",2],["7 – 9 pm",1]]}];
+const mkDef=()=>({profile:{chrono:null,score:0},settings:{wake:"07:00",sleep:"23:00",blockLen:50,place:"my desk"},tasks:[],plan:{date:"",blocks:[],over:[]},energy:[],hist:[]});
+function load(){const d=mkDef();try{const r=localStorage.getItem(KEY);if(r){const j=JSON.parse(r);return {...d,...j,profile:{...d.profile,...j.profile},settings:{...d.settings,...j.settings}};}}catch(e){}return d;}
+
+/* ---------- brain model ---------- */
+const CENTER={morning:9.5,intermediate:11,evening:17};
+function curve(ch,h){const c=CENTER[ch]||11;let e=3+1.6*Math.cos(2*Math.PI*(h-c)/24);
+ e-=0.8*Math.exp(-Math.pow(h-(c+4.5),2)/4);e+=0.4*Math.exp(-Math.pow(h-(c+8),2)/4);return Math.max(1,Math.min(5,e));}
+function energyAt(S,h){h=Math.floor(h)%24;const base=curve(S.profile.chrono,h);const xs=S.energy.filter(e=>e.h===h);
+ if(!xs.length)return base;const avg=xs.reduce((a,b)=>a+b.v,0)/xs.length;const w=Math.min(.7,xs.length*.3);return (1-w)*base+w*avg;}
+function mult(S,type){const f=a=>{if(a.length<3)return null;const r=a.slice(-12).map(x=>x.actual/x.est).sort((x,y)=>x-y);return r[Math.floor(r.length/2)];};
+ return Math.max(.7,Math.min(3,f(S.hist.filter(x=>x.type===type))||f(S.hist)||1.25));}
+const dur=(S,t)=>t.type==="review"?15:Math.max(10,Math.round(t.est*mult(S,t.type)/5)*5);
+
+function plan(S){
+ const date=todayStr(),now=new Date(),L=S.settings.blockLen,gap=L<=25?5:10;
+ const wake=toMin(S.settings.wake);let bed=toMin(S.settings.sleep);if(bed<=wake)bed+=1440;
+ const end=bed-60;let start=Math.max(wake+60,Math.ceil((now.getHours()*60+now.getMinutes())/15)*15);
+ const occ=new Uint8Array(3000);
+ const kept=(S.plan.date===date?S.plan.blocks:[]).filter(b=>{const t=S.tasks.find(x=>x.id===b.tid);return t&&t.done&&t.doneOn===date;});
+ kept.forEach(b=>{for(let i=b.s;i<b.s+b.l+gap&&i<3000;i++)occ[i]=1;});
+ const order=["deep","creative","social","routine","review"];
+ const pend=S.tasks.filter(t=>!t.done&&(!t.due||t.due<=date)).sort((a,b)=>order.indexOf(a.type)-order.indexOf(b.type)||(b.pri||2)-(a.pri||2));
+ const blocks=[...kept],over=[];
+ const score=(type,s,l)=>{let a=0,n=0;for(let m=s;m<s+l;m+=15){const e=energyAt(S,m/60);
+  a+=type==="deep"?e:type==="routine"?6-e:type==="creative"?5-Math.abs(e-2.8)*1.4:type==="social"?3.2+(e>2?.3:0):5-Math.abs(m/60-(bed/60-2))*.6;n++;}
+  let sc=a/n;blocks.forEach(b=>{if(b.type===type&&(Math.abs(b.s+b.l+gap-s)<=5||Math.abs(s+l+gap-b.s)<=5))sc+=.8;});return sc;};
+ pend.forEach(t=>{const d=dur(S,t),n=Math.ceil(d/L);let left=d;
+  for(let p=1;p<=n;p++){const l=p===n?left:Math.max(10,Math.round(d/n/5)*5);left-=l;let best=null,bs=-1e9;
+   for(let s=start;s+l<=end;s+=15){let ok=true;for(let i=s;i<s+l+gap;i++)if(occ[i]){ok=false;break;}
+    if(!ok)continue;const sc=score(t.type,s,l);if(sc>bs){bs=sc;best=s;}}
+   if(best===null){if(!over.includes(t.id))over.push(t.id);continue;}
+   for(let i=best;i<best+l+gap;i++)occ[i]=1;
+   let e=0,c=0;for(let m=best;m<best+l;m+=15){e+=energyAt(S,m/60);c++;}
+   blocks.push({id:uid(),tid:t.id,part:p,parts:n,s:best,l,type:t.type,e:e/c});}});
+ blocks.sort((a,b)=>a.s-b.s);return {date,blocks,over};}
+
+/* ---------- components ---------- */
+function Quiz({onDone}){
+ const [i,setI]=useState(0);const [sc,setSc]=useState([]);const q=QS[i];
+ const pick=v=>{const n=[...sc,v];if(i+1<QS.length){setSc(n);setI(i+1);}else{const t=n.reduce((a,b)=>a+b,0);onDone(t>=15?"morning":t>=11?"intermediate":"evening",t);}};
+ return html`<div className="card"><h2>Find your chronotype</h2>
+ <p className="muted">Question ${i+1} of ${QS.length} · inspired by the reduced Morningness–Eveningness Questionnaire. This sets your starting energy curve, which later learns from your check-ins.</p>
+ <h3>${q.q}</h3>${q.o.map(([t,v])=>html`<button key=${t} className="opt" onClick=${()=>pick(v)}>${t}</button>`)}</div>`;}
+
+function Finish({t,planned,onDone,onPartial,onCancel}){
+ const [a,setA]=useState(planned);const [nx,setNx]=useState(t.next||"");const isR=t.type==="review";
+ return html`<div className="fin">
+ ${isR&&html`<p className="muted">Retrieval check: with your notes closed, how well did you recall it?</p>
+  <div className="row">${[["poor","Poor"],["ok","Okay"],["good","Solid"]].map(([k,l])=>html`<button key=${k} className="btn" onClick=${()=>onDone(+a||planned,"",k)}>${l}</button>`)}</div>`}
+ <label>Actual minutes spent<input type="number" min="1" value=${a} onInput=${e=>setA(e.target.value)} /></label>
+ ${!isR&&html`<label>Closing ritual: write your next step (frees your mind for the next task)<input value=${nx} placeholder="Next I will…" onInput=${e=>setNx(e.target.value)} /></label>
+  <div className="row"><button className="btn pri" onClick=${()=>onDone(+a||planned,nx,"")}>Task complete</button>
+  <button className="btn" onClick=${()=>onPartial(+a||planned,nx)}>Not finished, save next step</button>
+  <button className="btn" onClick=${onCancel}>Cancel</button></div>`}
+ ${isR&&html`<button className="btn" onClick=${onCancel}>Cancel</button>`}</div>`;}
+
+function Today({S,now,open,setOpen,actions}){
+ const date=todayStr(),d=new Date(now),nowM=d.getHours()*60+d.getMinutes();
+ const blocks=S.plan.date===date?S.plan.blocks:[];
+ const get=id=>S.tasks.find(t=>t.id===id);
+ const live=blocks.filter(b=>get(b.tid));
+ const total=live.reduce((a,b)=>a+b.l,0);let sw=0;live.forEach((b,i)=>{if(i&&live[i-1].type!==b.type)sw++;});
+ const wake=toMin(S.settings.wake);let bed=toMin(S.settings.sleep);if(bed<=wake)bed+=1440;
+ const hrs=[];for(let h=Math.ceil(wake/60);h<bed/60;h++)hrs.push([h,energyAt(S,h)]);
+ const mx=Math.max(...hrs.map(x=>x[1]));const pk=hrs.filter(x=>x[1]>=mx-.5).map(x=>x[0]);
+ const peak=pk.length?fmt(pk[0]*60)+"–"+fmt((pk[pk.length-1]+1)*60):"–";
+ const doneN=live.filter(b=>get(b.tid).done).length;
+ const todayE=S.energy.filter(e=>e.d===date),lastE=todayE[todayE.length-1];
+ return html`<div>
+ <div className="card"><div className="top"><b>How’s your energy right now?</b><span className="muted">trains your personal curve</span></div>
+  <div className="row en" style=${{marginTop:8}}>${[["Drained",1],["Low",2],["Okay",3],["Good",4],["Peak",5]].map(([e,v])=>html`<button key=${v} className="btn" onClick=${()=>actions.energy(v)}>${v}. ${e}</button>`)}</div>
+  ${lastE?html`<p className="muted" style=${{marginBottom:0}}>Saved: ${LV[lastE.v-1]} (${lastE.v}/5) at ${lastE.t?new Date(lastE.t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):fmt(lastE.h*60)}. ${todayE.length} check-in${todayE.length>1?"s":""} today. Your plan was updated using this reading.</p>`:html`<p className="muted" style=${{marginBottom:0}}>Tap a number to log how alert you feel right now. Each reading reshapes your energy curve and re-plans your day.</p>`}</div>
+ <div className="grid"><div className="stat"><span className="muted">Your peak window</span><b>${peak}</b></div>
+  <div className="stat"><span className="muted">Planned work</span><b>${Math.floor(total/60)}h ${total%60}m</b></div>
+  <div className="stat"><span className="muted">Context switches</span><b>${sw}</b></div>
+  <div className="stat"><span className="muted">Blocks done</span><b>${doneN}/${live.length}</b></div></div>
+ <div className="top" style=${{marginTop:14}}><h2 style=${{margin:0}}>Today’s plan</h2><button className="btn" onClick=${actions.replan}>Re-plan from now</button></div>
+ ${!live.length&&html`<div className="card muted">No blocks yet. Add tasks in the <b>Tasks</b> tab and your day will be built around your energy curve.</div>`}
+ ${live.map((b,i)=>{const t=get(b.tid),ty=TYPES[b.type],prev=live[i-1];const g=prev?b.s-(prev.s+prev.l):0;
+  const isNow=nowM>=b.s&&nowM<b.s+b.l,past=!t.done&&nowM>=b.s+b.l;const last=b.part===b.parts;
+  const lvl=b.e>=3.8?"High":b.e>=2.8?"Medium":"Low";
+  return html`<div key=${b.id}>
+  ${g>0&&html`<div className="gap">${g<=20?""+g+" min break · move, hydrate, write your next step":"· "+g+" min free ·"}</div>`}
+  <div className=${"blk"+(t.done?" done":"")+(isNow?" now":"")+(past?" past":"")}>
+   <div className="bar" style=${{background:ty.c}}></div>
+   <div style=${{flex:1}}>
+    <div className="top"><span className="time">${fmt(b.s)}</span>
+     <span className="chip" style=${{borderColor:ty.c}}>${ty.i} ${ty.n} · ${lvl} energy</span></div>
+    <div style=${{fontWeight:600,marginTop:4,textDecoration:t.done?"line-through":"none"}}>${t.type==="review"?"Review: "+(t.base||t.title):t.title}${b.parts>1?" (part "+b.part+"/"+b.parts+")":""} <span className="muted">· ${b.l} min${isNow?" · NOW":""}${past?" · missed, try re-plan":""}</span></div>
+    <div className="cue">${ty.why}.</div>
+    ${t.type==="review"&&!t.done&&html`<div className="cue">Close your notes and write down everything you remember first, then check what you missed.</div>`}
+    ${!t.done&&html`<div className="cue">If it’s ${fmt(b.s)} and I’m at ${S.settings.place}, then I’ll open “${t.base||t.title}” and ${t.next?"start with: "+t.next:"do the first small step"}.</div>`}
+    ${!t.done&&last&&open!==b.id&&html`<button className="btn" style=${{marginTop:8}} onClick=${()=>setOpen(b.id)}>Finish…</button>`}
+    ${open===b.id&&html`<${Finish} t=${t} planned=${t.type==="review"?15:t.est} onDone=${(a,n,r)=>{actions.finish(t.id,a,n,r);setOpen(null);}} onPartial=${(a,n)=>{actions.partial(t.id,a,n);setOpen(null);}} onCancel=${()=>setOpen(null)} />`}
+   </div></div></div>`;})}
+ ${S.plan.over.map(id=>get(id)).filter(t=>t&&!t.done).length>0&&html`<div className="card"><b>Didn’t fit today</b><p className="muted">${S.plan.over.map(id=>get(id)).filter(t=>t&&!t.done).map(t=>t.title).join(", ")}. Protecting sleep beats cramming, so move them to tomorrow or shorten something.</p></div>`}
+ <div className="gap" style=${{marginTop:10}}>Wind-down from ${fmt(bed-60)} · sleep at ${fmt(bed)} · keep a steady wake time</div></div>`;}
+
+function Tasks({S,actions}){
+ const [f,setF]=useState({title:"",type:"deep",est:30,pri:2,learn:false});
+ const set=k=>e=>setF({...f,[k]:e.target.type==="checkbox"?e.target.checked:e.target.value});
+ const add=()=>{if(!f.title.trim())return;actions.add({title:f.title.trim(),type:f.type,est:Math.max(5,+f.est||30),pri:+f.pri,learn:f.learn});setF({...f,title:"",learn:false});};
+ const pend=S.tasks.filter(t=>!t.done).sort((a,b)=>(a.due||"").localeCompare(b.due||""));
+ return html`<div><div className="card"><h2>Add a task</h2>
+  <label>What needs doing?<input value=${f.title} placeholder="e.g. Chemistry chapter 5" onInput=${set("title")} onKeyDown=${e=>e.key==="Enter"&&add()} /></label>
+  <div className="grid"><label>Brain mode<select value=${f.type} onChange=${set("type")}>${["deep","creative","routine","social"].map(k=>html`<option key=${k} value=${k}>${TYPES[k].i} ${TYPES[k].n}</option>`)}</select></label>
+  <label>Your estimate (min)<input type="number" min="5" value=${f.est} onInput=${set("est")} /></label>
+  <label>Priority<select value=${f.pri} onChange=${set("pri")}><option value="3">High</option><option value="2">Normal</option><option value="1">Low</option></select></label></div>
+  <label className="ck"><input type="checkbox" checked=${f.learn} onChange=${set("learn")} /> I’m learning this, so schedule spaced reviews (1, 3, 7, 14, 30 days)</label>
+  <p className="muted">Estimates are auto-corrected using your history (planning fallacy). Current multiplier for ${TYPES[f.type].n}: ×${mult(S,f.type).toFixed(2)}</p>
+  <button className="btn pri" onClick=${add}>Add and re-plan</button></div>
+  <div className="card"><h2>Open tasks (${pend.length})</h2>${!pend.length&&html`<p className="muted">Nothing pending.</p>`}
+  ${pend.map(t=>html`<div key=${t.id} className="row" style=${{justifyContent:"space-between",padding:"6px 0"}}>
+   <div><span className="chip" style=${{borderColor:TYPES[t.type].c}}>${TYPES[t.type].i} ${TYPES[t.type].n}</span> <b>${t.type==="review"?"Review: "+(t.base||t.title):t.title}</b>
+   <div className="muted">${t.type==="review"?"Due "+t.due+" · interval stage "+(t.stage+1)+"/5":t.est+" min est → "+dur(S,t)+" min planned"}${t.learn?" · reviews on":""}${t.next?" · next: "+t.next:""}</div></div>
+   <button className="del" title="Delete" onClick=${()=>actions.del(t.id)}>Remove</button></div>`)}</div></div>`;}
+
+function Insights({S}){
+ const wake=toMin(S.settings.wake);let bed=toMin(S.settings.sleep);if(bed<=wake)bed+=1440;
+ const hrs=[];for(let h=Math.ceil(wake/60);h<bed/60;h++)hrs.push(h);
+ const done=S.tasks.filter(t=>t.done).length;const names={morning:"Morning type",intermediate:"Intermediate type",evening:"Evening type"};
+ return html`<div><div className="card"><h2>Your energy curve</h2>
+  <p className="muted">${names[S.profile.chrono]} (quiz score ${S.profile.score}/20). Starts from your chronotype and blends in your check-ins as they accumulate (${S.energy.length} so far).</p>
+  <div className="chart">${hrs.map(h=>{const e=energyAt(S,h);return html`<div key=${h} title=${fmt(h*60)+" · "+e.toFixed(1)+"/5"} style=${{height:(e/5*100)+"%"}}></div>`;})}</div>
+  <div className="axis">${hrs.map(h=>html`<span key=${h}>${h%24}</span>`)}</div></div>
+  <div className="card"><h2>Estimate accuracy</h2>
+  <div className="grid">${["deep","creative","routine","social"].map(k=>{const n=S.hist.filter(x=>x.type===k).length;return html`<div key=${k} className="stat"><span className="muted">${TYPES[k].i} ${TYPES[k].n}</span><b>×${mult(S,k).toFixed(2)}</b><span className="muted">${n} logged${n<3?" (using default until 3)":""}</span></div>`;})}</div>
+  <p className="muted">A multiplier of ×1.5 means your tasks usually take 50% longer than you guess. The planner already accounts for it.</p></div>
+  <div className="card"><h2>Progress</h2><p>${done} tasks completed · ${S.tasks.filter(t=>t.type==="review"&&!t.done).length} spaced reviews queued</p>
+  <p className="muted">Built on: chronotype-matched scheduling, task-type matching, spaced repetition and retrieval practice, batching to reduce attention residue, protected sleep, planning-fallacy correction, and if-then implementation intentions.</p></div></div>`;}
+
+function Settings({S,actions}){
+ const [sure,setSure]=useState(false);const st=S.settings;
+ const up=k=>e=>actions.settings({[k]:k==="blockLen"?+e.target.value:e.target.value});
+ return html`<div className="card"><h2>Settings</h2><div className="grid">
+ <label>Wake time<input type="time" value=${st.wake} onChange=${up("wake")} /></label>
+ <label>Sleep time<input type="time" value=${st.sleep} onChange=${up("sleep")} /></label>
+ <label>Focus block length<select value=${st.blockLen} onChange=${up("blockLen")}><option value="25">25 min</option><option value="50">50 min</option><option value="90">90 min</option></select></label>
+ <label>Where you study/work<input value=${st.place} onInput=${up("place")} /></label></div>
+ <p className="muted">Try different block lengths. The “90-minute cycle” is only suggestive, so find what feels best for you.</p>
+ <div className="row"><button className="btn" onClick=${actions.retake}>Retake chronotype quiz</button>
+ <button className="btn" onClick=${()=>{if(sure){actions.reset();setSure(false);}else setSure(true);}}>${sure?"Tap again to erase everything":"Reset all data"}</button></div></div>`;}
+
+function App(){
+ const [S,setS]=useState(load);const [tab,setTab]=useState("today");const [now,setNow]=useState(Date.now());const [open,setOpen]=useState(null);
+ useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}},[S]);
+ useEffect(()=>{const i=setInterval(()=>setNow(Date.now()),30000);return()=>clearInterval(i);},[]);
+ useEffect(()=>{if(S.profile.chrono&&S.plan.date!==todayStr())setS(p=>({...p,plan:plan(p)}));},[S.profile.chrono]);
+ const withPlan=n=>({...n,plan:plan(n)});
+ const actions={
+  replan:()=>setS(p=>withPlan(p)),
+  add:t=>setS(p=>withPlan({...p,tasks:[...p.tasks,{id:uid(),done:false,...t}]})),
+  del:id=>setS(p=>withPlan({...p,tasks:p.tasks.filter(t=>t.id!==id)})),
+  energy:v=>setS(p=>withPlan({...p,energy:[...p.energy,{h:new Date().getHours(),v,d:todayStr(),t:Date.now()}].slice(-400)})),
+  settings:o=>setS(p=>withPlan({...p,settings:{...p.settings,...o}})),
+  retake:()=>setS(p=>({...p,profile:{chrono:null,score:0}})),
+  reset:()=>setS(mkDef()),
+  finish:(id,actual,next,rating)=>setS(p=>{
+   const date=todayStr(),t=p.tasks.find(x=>x.id===id);if(!t)return p;
+   let tasks=p.tasks.map(x=>x.id===id?{...x,done:true,doneOn:date,actual,next}:x),hist=p.hist;
+   if(t.type!=="review")hist=[...hist,{type:t.type,est:t.est,actual}];
+   let ns=-1;
+   if(t.type==="review"){ns=rating==="good"?t.stage+1:rating==="ok"?t.stage:0;}else if(t.learn)ns=0;
+   if(ns>=0&&ns<INTERVALS.length)tasks=[...tasks,{id:uid(),type:"review",title:t.base||t.title,base:t.base||t.title,est:15,pri:2,done:false,due:addDays(date,INTERVALS[ns]),stage:ns}];
+   return {...p,tasks,hist};})
+ };
+ actions.partial=(a,n)=>{const id=open&&S.plan.blocks.find(b=>b.id===open)?.tid;if(!id)return;
+  setS(p=>{const t=p.tasks.find(x=>x.id===id);const m=mult(p,t.type);
+   const nt={...p,tasks:p.tasks.map(x=>x.id===id?{...x,next:n,est:Math.max(10,x.est-Math.round(a/m))}:x)};return withPlan(nt);});};
+ const tabs=[["today","Today"],["tasks","Tasks"],["insights","Insights"],["settings","Settings"]];
+ return html`<div>
+  <div className="top"><div><h1>NeuroTable</h1><span className="muted">${new Date(now).toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})}</span></div>
+  ${S.profile.chrono&&html`<span className="chip">${{morning:"Morning type",intermediate:"Intermediate type",evening:"Evening type"}[S.profile.chrono]}</span>`}</div>
+  ${!S.profile.chrono?html`<${Quiz} onDone=${(c,s)=>setS(p=>withPlan({...p,profile:{chrono:c,score:s}}))} />`:html`
+   <div className="nav">${tabs.map(([k,l])=>html`<button key=${k} className=${tab===k?"on":""} onClick=${()=>setTab(k)}>${l}</button>`)}</div>
+   ${tab==="today"&&html`<${Today} S=${S} now=${now} open=${open} setOpen=${setOpen} actions=${actions} />`}
+   ${tab==="tasks"&&html`<${Tasks} S=${S} actions=${actions} />`}
+   ${tab==="insights"&&html`<${Insights} S=${S} />`}
+   ${tab==="settings"&&html`<${Settings} S=${S} actions=${actions} />`}`}
+ </div>`;}
+ReactDOM.createRoot(document.getElementById("root")).render(html`<${App} />`);
+</script>
+</body>
+</html>
